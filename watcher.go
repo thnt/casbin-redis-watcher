@@ -12,7 +12,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
-	rds "github.com/go-redis/redis/v8"
+	rds "github.com/redis/go-redis/v9"
 )
 
 type Watcher struct {
@@ -20,7 +20,7 @@ type Watcher struct {
 	subClient rds.UniversalClient
 	pubClient rds.UniversalClient
 	options   WatcherOptions
-	close     chan struct{}
+	close     chan bool
 	callback  func(string)
 	ctx       context.Context
 }
@@ -116,7 +116,7 @@ func NewWatcher(addr string, option WatcherOptions) (persist.Watcher, error) {
 	initConfig(&option)
 	w := &Watcher{
 		ctx:   context.Background(),
-		close: make(chan struct{}),
+		close: make(chan bool, 1),
 	}
 
 	if err := w.initConfig(option); err != nil {
@@ -157,7 +157,7 @@ func NewWatcherWithCluster(addrs string, option WatcherOptions) (persist.Watcher
 			Password: option.ClusterOptions.Password,
 		}),
 		ctx:   context.Background(),
-		close: make(chan struct{}),
+		close: make(chan bool, 1),
 	}
 
 	err := w.initConfig(option, true)
@@ -220,7 +220,7 @@ func NewPublishWatcher(addr string, option WatcherOptions) (persist.Watcher, err
 	w := &Watcher{
 		pubClient: rds.NewClient(&option.Options),
 		ctx:       context.Background(),
-		close:     make(chan struct{}),
+		close:     make(chan bool, 1),
 	}
 
 	initConfig(&option)
@@ -480,6 +480,7 @@ func (w *Watcher) GetWatcherOptions() WatcherOptions {
 func (w *Watcher) Close() {
 	w.l.Lock()
 	defer w.l.Unlock()
+	w.close <- true
 	close(w.close)
-	w.pubClient.Publish(w.ctx, w.options.Channel, "Close")
+	// w.pubClient.Publish(w.ctx, w.options.Channel, "Close")
 }
